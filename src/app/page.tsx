@@ -331,25 +331,64 @@ Format the output strictly as JSON matching the schema below:
 }
 `;
 
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: SchemaType.OBJECT,
-            properties: {
-              candidate_name: { type: SchemaType.STRING },
-              email_body: { type: SchemaType.STRING },
-              adapted_cover_letter: { type: SchemaType.STRING },
-              similar_companies: {
-                type: SchemaType.ARRAY,
-                items: { type: SchemaType.STRING }
-              }
-            },
-            required: ["candidate_name", "email_body", "adapted_cover_letter", "similar_companies"]
+      let result;
+      try {
+        result = await model.generateContent({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: SchemaType.OBJECT,
+              properties: {
+                candidate_name: { type: SchemaType.STRING },
+                email_body: { type: SchemaType.STRING },
+                adapted_cover_letter: { type: SchemaType.STRING },
+                similar_companies: {
+                  type: SchemaType.ARRAY,
+                  items: { type: SchemaType.STRING }
+                }
+              },
+              required: ["candidate_name", "email_body", "adapted_cover_letter", "similar_companies"]
+            }
           }
+        });
+      } catch (firstErr: any) {
+        console.warn("Primary model call failed, checking if 503 or overload...", firstErr);
+        
+        const errMsg = firstErr?.message || "";
+        const is503 = errMsg.includes("503") || 
+                      errMsg.toLowerCase().includes("overloaded") || 
+                      errMsg.toLowerCase().includes("demand") || 
+                      errMsg.toLowerCase().includes("resource exhausted") ||
+                      firstErr?.status === 503;
+
+        if (is503) {
+          setLoadingStep("Primary model overloaded. Routing to fallback engine...");
+          const fallbackModel = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
+          
+          result = await fallbackModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  candidate_name: { type: SchemaType.STRING },
+                  email_body: { type: SchemaType.STRING },
+                  adapted_cover_letter: { type: SchemaType.STRING },
+                  similar_companies: {
+                    type: SchemaType.ARRAY,
+                    items: { type: SchemaType.STRING }
+                  }
+                },
+                required: ["candidate_name", "email_body", "adapted_cover_letter", "similar_companies"]
+              }
+            }
+          });
+        } else {
+          throw firstErr;
         }
-      });
+      }
 
       const responseText = result.response.text();
       const parsedData = JSON.parse(responseText);
