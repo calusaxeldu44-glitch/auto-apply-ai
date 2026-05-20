@@ -21,11 +21,11 @@ import {
   Send,
   User,
   RefreshCw,
-  UploadCloud,
+  Upload,
   FileCheck
 } from "lucide-react";
 
-// Pre-filled sample data for instant verification/test
+// Pre-filled sample data for verification
 const SAMPLE_DATA = {
   resume: `Alex Mercer
 alex.mercer@email.com | (555) 019-2834 | San Francisco, CA
@@ -63,7 +63,7 @@ Alex Mercer`,
   hrEmail: "careers@vercel.com"
 };
 
-// Client-side text extraction helper with dynamic imports to avoid SSR ReferenceErrors
+// Client-side text extraction helper
 const extractText = async (file: File): Promise<string> => {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -78,7 +78,6 @@ const extractText = async (file: File): Promise<string> => {
 
   if (extension === "docx") {
     const arrayBuffer = await file.arrayBuffer();
-    // Dynamically import mammoth to keep build server node execution safe
     // @ts-ignore
     const mammoth = await import("mammoth");
     const result = await mammoth.extractRawText({ arrayBuffer });
@@ -87,11 +86,8 @@ const extractText = async (file: File): Promise<string> => {
 
   if (extension === "pdf") {
     const arrayBuffer = await file.arrayBuffer();
-    // Dynamically import pdfjs-dist to bypass SSR window undefined checks
     // @ts-ignore
     const pdfjsLib = await import("pdfjs-dist");
-    
-    // Configure worker CDN matching the local package version
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://unpkg.com/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs";
 
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
@@ -110,10 +106,10 @@ const extractText = async (file: File): Promise<string> => {
   }
 
   if (extension === "doc") {
-    throw new Error("Legacy Word (.doc) files are not supported client-side. Please save as .docx or copy-paste text directly.");
+    throw new Error("Legacy .doc files not supported. Save as .docx or copy-paste text.");
   }
 
-  throw new Error("Unsupported file format. Please upload a .pdf, .docx, or .txt file.");
+  throw new Error("Unsupported format. Use .pdf, .docx, or .txt.");
 };
 
 interface FileUploadZoneProps {
@@ -135,13 +131,13 @@ const FileUploadZone: React.FC<FileUploadZoneProps> = ({ onFileExtracted, onErro
       try {
         const text = await extractText(file);
         if (!text || text.trim() === "") {
-          throw new Error("Extracted text is empty. Ensure the file contains selectable text (not scanned images).");
+          throw new Error("File appears to be empty or lacks selectable text.");
         }
         onFileExtracted(text, file.name);
         setUploadedName(file.name);
       } catch (err: any) {
         console.error(err);
-        onError(err.message || "Error parsing document.");
+        onError(err.message || "Error parsing file.");
       } finally {
         setIsParsing(false);
       }
@@ -158,35 +154,30 @@ const FileUploadZone: React.FC<FileUploadZoneProps> = ({ onFileExtracted, onErro
   return (
     <div
       {...getRootProps()}
-      className={`border border-dashed rounded-xl p-3.5 text-center cursor-pointer transition-all ${
+      className={`border border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${
         isDragActive
-          ? "border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/5"
-          : "border-slate-800 bg-slate-950/20 hover:border-slate-700 hover:bg-slate-900/30"
+          ? "border-zinc-300 bg-zinc-900/50"
+          : "border-zinc-800 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/20"
       }`}
     >
       <input {...getInputProps()} />
       {isParsing ? (
-        <div className="flex items-center justify-center gap-2 py-1">
-          <svg className="animate-spin h-4 w-4 text-indigo-400" fill="none" viewBox="0 0 24 24">
+        <div className="flex items-center justify-center gap-2 py-0.5">
+          <svg className="animate-spin h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <span className="text-xs font-semibold text-indigo-300 animate-pulse">Extracting text...</span>
+          <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Parsing...</span>
         </div>
       ) : uploadedName ? (
-        <div className="flex items-center justify-center gap-2 py-1 text-emerald-400 font-medium">
-          <FileCheck className="h-4.5 w-4.5 shrink-0" />
-          <span className="text-xs truncate max-w-[240px]" title={uploadedName}>
-            Loaded: {uploadedName}
-          </span>
+        <div className="flex items-center justify-center gap-2 py-0.5 text-zinc-300 font-mono text-[11px]">
+          <FileCheck className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+          <span className="truncate max-w-[200px]">{uploadedName}</span>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-300">
-          <div className="flex items-center gap-1.5">
-            <UploadCloud className="h-4 w-4 text-indigo-400" />
-            <span className="text-xs font-semibold">Drop or Upload {label}</span>
-          </div>
-          <span className="text-[10px] text-slate-650">PDF, DOCX, or TXT</span>
+        <div className="flex items-center justify-center gap-2 text-zinc-500 hover:text-zinc-400 py-0.5">
+          <Upload className="h-3.5 w-3.5 text-zinc-500" />
+          <span className="text-[11px] font-mono uppercase tracking-wider">Upload {label}</span>
         </div>
       )}
     </div>
@@ -220,7 +211,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"email" | "letter">("email");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Load from localStorage on mount (safe hydration)
+  // Load from localStorage on mount
   useEffect(() => {
     const savedKey = localStorage.getItem("GEMINI_API_KEY") || "";
     setGeminiKey(savedKey);
@@ -237,7 +228,7 @@ export default function Home() {
   // Handle toast timeout
   useEffect(() => {
     if (toast) {
-      const timer = setTimeout(() => setToast(null), 5000);
+      const timer = setTimeout(() => setToast(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [toast]);
@@ -276,7 +267,7 @@ export default function Home() {
 
     localStorage.setItem("AUTO_APPLY_RESUME", SAMPLE_DATA.resume);
     localStorage.setItem("AUTO_APPLY_BASE_LETTER", SAMPLE_DATA.baseCoverLetter);
-    setToast({ message: "Loaded sample profile data.", type: "success" });
+    setToast({ message: "Loaded sample data.", type: "success" });
   };
 
   const handleCopy = (text: string, field: string) => {
@@ -292,46 +283,44 @@ export default function Home() {
   const generateApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!geminiKey) {
-      setError("Please provide a valid Gemini API Key first.");
-      showToastError("Missing Gemini API Key.");
+      setError("Please enter a Gemini API Key.");
+      showToastError("Missing API Key.");
       return;
     }
     if (!resume || !companyTarget) {
-      setError("Resume and Company Target are required to customize your application.");
+      setError("Resume and Company Target are required.");
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setLoadingStep("Initializing Gemini Engine...");
+    setLoadingStep("Configuring API...");
 
     try {
-      // Simulate progressive steps to improve perceived user experience
-      setTimeout(() => setLoadingStep("Analyzing Target Company & Industry..."), 1200);
-      setTimeout(() => setLoadingStep("Scanning Resume & Base Cover Letter..."), 2400);
-      setTimeout(() => setLoadingStep("Drafting Tailored Pitch & Recommendations..."), 4000);
+      setTimeout(() => setLoadingStep("Analyzing files..."), 1000);
+      setTimeout(() => setLoadingStep("Optimizing pitch structure..."), 2200);
 
       const genAI = new GoogleGenerativeAI(geminiKey);
       const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
 
       const prompt = `
-You are a top-tier recruiter and career branding specialist.
-Analyze the following Target Company, and cross-reference the candidate's Resume and Base Cover Letter to generate a highly compelling, custom-tailored application.
+You are an expert career brand specialist. 
+Adapt this candidate's resume and base cover letter to match the target company's culture, focus areas, and role expectations.
 
-1. **Target Company / URL**: "${companyTarget}"
-2. **Application Type**: "${appType === "internship" ? "Internship" : "Full-Time Job"}"
-3. **Specific Demands / User Focus Notes**: "${specificDemands || "None provided"}"
-4. **Candidate Resume**:
+1. **Target Company**: "${companyTarget}"
+2. **Application Type**: "${appType}"
+3. **Specific Notes / Custom Focus**: "${specificDemands || "None"}"
+4. **Resume**:
 ${resume}
 
 5. **Base Cover Letter**:
-${baseCoverLetter || "None provided. Write a customized cover letter from scratch based on the resume details."}
+${baseCoverLetter || "None provided. Draft from scratch."}
 
 Please output a JSON response containing:
-1. "candidate_name": The full name of the candidate extracted from the Resume. If not found or ambiguous, return "Candidate".
-2. "email_body": A short, high-impact introductory email to the recruiter/HR contact (100-150 words). Make it engaging, professional, and clear.
-3. "adapted_cover_letter": A beautifully structured, persuasive cover letter (250-400 words) aligning the candidate's core accomplishments with the company's industry position, product ethos, or corporate mission. Integrate specific demands naturally.
-4. "similar_companies": An array of 3 to 5 similar companies in the same industry space that the candidate could target.
+1. "candidate_name": Full name extracted from the Resume. If missing, return "Candidate".
+2. "email_body": A high-impact introductory email to the recruiter (100-150 words).
+3. "adapted_cover_letter": A structured, persuasive cover letter (250-400 words) aligning the accomplishments with the target company's mission/product.
+4. "similar_companies": 3 to 5 similar companies the candidate can target.
 
 Format the output strictly as JSON matching the schema below:
 {
@@ -370,13 +359,11 @@ Format the output strictly as JSON matching the schema below:
       setAdaptedCoverLetter(parsedData.adapted_cover_letter || "");
       setSimilarCompanies(parsedData.similar_companies || []);
       setActiveTab("email");
-      setToast({ message: "Successfully generated application drafts!", type: "success" });
+      setToast({ message: "Generated successfully.", type: "success" });
     } catch (err: any) {
       console.error(err);
-      setError(
-        err.message || "An unexpected error occurred while communicating with Gemini. Please verify your API Key and try again."
-      );
-      showToastError("Generation failed. Check key & logs.");
+      setError(err.message || "Failed to generate application. Please check your API key and connection.");
+      showToastError("Generation failed.");
     } finally {
       setIsLoading(false);
       setLoadingStep("");
@@ -399,394 +386,307 @@ Format the output strictly as JSON matching the schema below:
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-between overflow-x-hidden">
-      {/* Dynamic Toast Notifications */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-300 flex flex-col justify-between selection:bg-zinc-800 selection:text-white antialiased">
+      {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-5 right-5 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl border backdrop-blur-md shadow-2xl animate-float transition-all duration-300 bg-slate-950/90 border-slate-800 max-w-sm">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-lg border border-zinc-800 bg-zinc-900/90 text-zinc-200 shadow-2xl backdrop-blur-md max-w-sm animate-fade-in font-mono text-xs">
           {toast.type === "error" ? (
-            <AlertCircle className="h-4.5 w-4.5 text-rose-450 shrink-0" />
+            <AlertCircle className="h-4 w-4 text-zinc-400 shrink-0" />
           ) : (
-            <FileCheck className="h-4.5 w-4.5 text-emerald-450 shrink-0" />
+            <FileCheck className="h-4 w-4 text-zinc-400 shrink-0" />
           )}
-          <span className={`text-xs font-semibold ${toast.type === "error" ? "text-rose-205" : "text-emerald-205"}`}>
-            {toast.message}
-          </span>
+          <span>{toast.message}</span>
           <button
             type="button"
             onClick={() => setToast(null)}
-            className="text-slate-400 hover:text-slate-200 ml-2 text-sm font-bold cursor-pointer"
+            className="text-zinc-500 hover:text-zinc-300 ml-auto pl-2 font-bold cursor-pointer"
           >
             ×
           </button>
         </div>
       )}
 
-      {/* Decorative Background Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-900/10 blur-[120px] pointer-events-none animate-pulse-glow" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-900/10 blur-[120px] pointer-events-none animate-pulse-glow" />
-
-      {/* HEADER SECTION A */}
-      <header className="border-b border-slate-900 bg-slate-950/60 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 shadow-lg shadow-indigo-500/10">
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-                Auto-Apply AI
-              </h1>
-              <p className="text-[10px] text-slate-500 font-mono tracking-wider uppercase">
-                Ultra-Lean Client Edition
-              </p>
-            </div>
+      {/* HEADER */}
+      <header className="border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm font-bold tracking-wider text-zinc-100 uppercase">
+              Auto-Apply
+            </span>
+            <span className="text-[10px] font-mono text-zinc-650 bg-zinc-900 border border-zinc-850 px-1.5 py-0.5 rounded">
+              v2.0
+            </span>
           </div>
 
-          {/* Settings / API Key */}
-          <div className="flex items-center gap-4">
-            <div className="relative flex items-center bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-1.5 gap-2 max-w-[280px] sm:max-w-xs transition-all focus-within:border-indigo-500/50">
-              <Key className="h-4 w-4 text-indigo-400 shrink-0" />
+          {/* API Key Input */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center bg-zinc-900 border border-zinc-850 rounded px-2.5 py-1 gap-2 w-48 sm:w-64 transition-colors focus-within:border-zinc-700">
+              <Key className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
               <input
                 type={showKey ? "text" : "password"}
-                placeholder="Enter Gemini API Key..."
+                placeholder="Gemini API Key..."
                 value={geminiKey}
                 onChange={handleKeyChange}
-                className="bg-transparent text-sm w-full focus:outline-none text-slate-200 placeholder-slate-500"
+                className="bg-transparent text-xs w-full focus:outline-none text-zinc-200 placeholder-zinc-600 font-mono"
                 id="gemini_key_input"
               />
               <button
                 type="button"
                 onClick={() => setShowKey(!showKey)}
-                className="text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
-                title={showKey ? "Hide Key" : "Show Key"}
+                className="text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer"
               >
-                {showKey ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                {showKey ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
               </button>
               {isKeySaved && (
-                <span className="flex h-2 w-2 rounded-full bg-emerald-500" title="Key stored in browser" />
+                <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 shrink-0" title="Saved locally" />
               )}
             </div>
             <a
               href="https://aistudio.google.com/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-all font-medium"
+              className="hidden sm:inline-flex text-[11px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors"
             >
-              Get Key <ExternalLink className="h-3 w-3" />
+              Get Key
             </a>
           </div>
         </div>
-        {/* Help text on Mobile */}
-        <div className="sm:hidden text-center pb-2 bg-slate-950/60 border-b border-slate-900">
-          <p className="text-[11px] text-slate-500">
-            Secure client-only storage. Get your key at{" "}
-            <a
-              href="https://aistudio.google.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-indigo-400 underline"
-            >
-              Google AI Studio
-            </a>.
-          </p>
-        </div>
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 w-full">
-        {/* SECTION B: INPUT FORM (Left Column) */}
+      {/* MAIN LAYOUT */}
+      <main className="max-w-6xl mx-auto px-6 py-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-10 w-full">
+        {/* INPUTS COLUMN */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          <div className="bg-slate-950/40 border border-slate-900 rounded-2xl p-5 backdrop-blur-md relative flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-900">
-              <div className="flex items-center gap-2">
-                <Layers className="h-4.5 w-4.5 text-indigo-400" />
-                <h2 className="text-base font-semibold text-slate-200">
-                  Target & Profile Inputs
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={loadSampleData}
-                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5 border border-indigo-500/15 cursor-pointer"
-              >
-                <RefreshCw className="h-3 w-3" /> Load Sample
-              </button>
+          <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
+            <span className="text-xs font-mono font-semibold tracking-wider text-zinc-400 uppercase">
+              Application Context
+            </span>
+            <button
+              type="button"
+              onClick={loadSampleData}
+              className="text-[11px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="h-3 w-3 animate-none" /> Load Sample
+            </button>
+          </div>
+
+          <form onSubmit={generateApplication} className="flex flex-col gap-5">
+            {/* Resume Upload + Editor */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-zinc-500" /> Resume / CV*
+              </label>
+              <FileUploadZone
+                onFileExtracted={(text) => {
+                  setResume(text);
+                  localStorage.setItem("AUTO_APPLY_RESUME", text);
+                }}
+                onError={showToastError}
+                label="Resume"
+              />
+              <textarea
+                placeholder="Paste plain text resume or drop file above..."
+                value={resume}
+                onChange={handleResumeChange}
+                rows={5}
+                className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 font-mono resize-y leading-relaxed"
+                required
+              />
             </div>
 
-            <form onSubmit={generateApplication} className="flex flex-col gap-4">
-              {/* Resume text and dropzone */}
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-slate-400 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 text-indigo-400" /> Resume / CV (Text)*
-                  </span>
-                </label>
-                {/* PDF/Word Drag and Drop Area */}
-                <FileUploadZone
-                  onFileExtracted={(text, name) => {
-                    setResume(text);
-                    localStorage.setItem("AUTO_APPLY_RESUME", text);
-                    setToast({ message: `Successfully loaded resume from ${name}`, type: "success" });
-                  }}
-                  onError={showToastError}
-                  label="Resume"
-                />
-                <textarea
-                  placeholder="Paste your plain text resume here or upload a document above..."
-                  value={resume}
-                  onChange={handleResumeChange}
-                  rows={5}
-                  className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:border-indigo-500 focus:bg-slate-900/50 resize-y"
-                  required
-                />
-              </div>
+            {/* Base Cover Letter Upload + Editor */}
+            <div className="flex flex-col gap-2">
+              <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Mail className="h-3.5 w-3.5 text-zinc-500" /> Base Cover Letter
+              </label>
+              <FileUploadZone
+                onFileExtracted={(text) => {
+                  setBaseCoverLetter(text);
+                  localStorage.setItem("AUTO_APPLY_BASE_LETTER", text);
+                }}
+                onError={showToastError}
+                label="Cover Letter"
+              />
+              <textarea
+                placeholder="Paste base cover letter or drop file above..."
+                value={baseCoverLetter}
+                onChange={handleBaseLetterChange}
+                rows={3}
+                className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 font-mono resize-y leading-relaxed"
+              />
+            </div>
 
-              {/* Base Cover Letter and dropzone */}
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-slate-400 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="h-3.5 w-3.5 text-indigo-400" /> Base Cover Letter (Optional)
-                  </span>
-                </label>
-                {/* PDF/Word Drag and Drop Area */}
-                <FileUploadZone
-                  onFileExtracted={(text, name) => {
-                    setBaseCoverLetter(text);
-                    localStorage.setItem("AUTO_APPLY_BASE_LETTER", text);
-                    setToast({ message: `Successfully loaded base cover letter from ${name}`, type: "success" });
-                  }}
-                  onError={showToastError}
-                  label="Cover Letter"
-                />
-                <textarea
-                  placeholder="Paste cover letter or upload document. Gemini will adapt it, or write one from scratch if left empty..."
-                  value={baseCoverLetter}
-                  onChange={handleBaseLetterChange}
-                  rows={3}
-                  className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:border-indigo-500 focus:bg-slate-900/50 resize-y"
-                />
-              </div>
+            {/* Target Company */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5 text-zinc-500" /> Target Company*
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Vercel (vercel.com)"
+                value={companyTarget}
+                onChange={(e) => setCompanyTarget(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 font-mono"
+                required
+              />
+            </div>
 
-              {/* Company & URL */}
+            {/* Config row */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5 text-indigo-400" /> Company Target*
+                <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Briefcase className="h-3.5 w-3.5 text-zinc-500" /> Type
+                </label>
+                <select
+                  value={appType}
+                  onChange={(e) => setAppType(e.target.value as "job" | "internship")}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-700 font-mono cursor-pointer appearance-none"
+                  style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%2352525b\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.25rem', backgroundRepeat: 'no-repeat' }}
+                >
+                  <option value="job">Job</option>
+                  <option value="internship">Internship</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Send className="h-3.5 w-3.5 text-zinc-500" /> Recruiter Email
                 </label>
                 <input
-                  type="text"
-                  placeholder="e.g. Vercel (vercel.com) or Linear"
-                  value={companyTarget}
-                  onChange={(e) => setCompanyTarget(e.target.value)}
-                  className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:border-indigo-500 focus:bg-slate-900/50"
-                  required
+                  type="email"
+                  placeholder="careers@company.com"
+                  value={hrEmail}
+                  onChange={(e) => setHrEmail(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 font-mono"
                 />
               </div>
+            </div>
 
-              {/* App Type & Recruiter Email */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                    <Briefcase className="h-3.5 w-3.5 text-indigo-400" /> Application Type
-                  </label>
-                  <select
-                    value={appType}
-                    onChange={(e) => setAppType(e.target.value as "job" | "internship")}
-                    className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 focus:border-indigo-500 focus:bg-slate-900/50 cursor-pointer appearance-none"
-                    style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.25rem', backgroundRepeat: 'no-repeat' }}
-                  >
-                    <option value="job" className="bg-slate-950">Job</option>
-                    <option value="internship" className="bg-slate-950">Internship</option>
-                  </select>
-                </div>
+            {/* Demands */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5 text-zinc-500" /> Focus Notes
+              </label>
+              <textarea
+                placeholder="e.g. Highlight developer tooling experience..."
+                value={specificDemands}
+                onChange={(e) => setSpecificDemands(e.target.value)}
+                rows={2}
+                className="w-full bg-zinc-950 border border-zinc-900 rounded p-2.5 text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 font-mono resize-none leading-relaxed"
+              />
+            </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                    <Send className="h-3.5 w-3.5 text-indigo-400" /> HR/Recruiter Email
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="recruiter@company.com"
-                    value={hrEmail}
-                    onChange={(e) => setHrEmail(e.target.value)}
-                    className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:border-indigo-500 focus:bg-slate-900/50"
-                  />
-                </div>
+            {error && (
+              <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded text-xs text-zinc-400 font-mono flex items-start gap-2.5">
+                <AlertCircle className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
+            )}
 
-              {/* Specific Demands */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5 text-indigo-400" /> Specific Demands / Focus
-                </label>
-                <textarea
-                  placeholder="e.g. Highlight leadership skills, state availability from June, or mention a referral..."
-                  value={specificDemands}
-                  onChange={(e) => setSpecificDemands(e.target.value)}
-                  rows={2}
-                  className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 placeholder-slate-600 focus:border-indigo-500 focus:bg-slate-900/50 resize-none"
-                />
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-955/20 border border-red-500/20 rounded-xl flex items-start gap-2.5">
-                  <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-rose-300 leading-normal">{error}</p>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || !geminiKey || !resume || !companyTarget}
-                className={`w-full relative overflow-hidden group py-3 rounded-xl font-medium text-sm transition-all duration-305 flex items-center justify-center gap-2 border ${
-                  !geminiKey
-                    ? "bg-slate-900/40 border-slate-800 text-slate-500 cursor-not-allowed"
-                    : !resume || !companyTarget
-                    ? "bg-slate-900/45 border-slate-800 text-indigo-400/55 cursor-not-allowed"
-                    : "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-indigo-500 hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/25 active:scale-[0.99] cursor-pointer"
-                }`}
-              >
-                {isLoading ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>Generating Pitch...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 shrink-0 transition-transform group-hover:rotate-12" />
-                    <span>Generate Application</span>
-                  </>
-                )}
-              </button>
-
-              {!geminiKey && (
-                <p className="text-[10px] text-center text-slate-500 mt-1">
-                  * Provide a Gemini API Key in the header to unlock generation.
-                </p>
-              )}
-            </form>
-          </div>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isLoading || !geminiKey || !resume || !companyTarget}
+              className={`w-full py-2.5 rounded font-mono text-xs uppercase tracking-wider transition-colors ${
+                !geminiKey || !resume || !companyTarget
+                  ? "bg-zinc-900 text-zinc-600 border border-zinc-850 cursor-not-allowed"
+                  : "bg-zinc-100 text-zinc-950 border border-zinc-200 hover:bg-zinc-200 cursor-pointer active:bg-zinc-300 font-semibold"
+              }`}
+            >
+              {isLoading ? "Processing..." : "Generate Application"}
+            </button>
+          </form>
         </div>
 
-        {/* SECTION C: OUTPUT DISPLAY (Right Column) */}
-        <div className="lg:col-span-7 flex flex-col min-h-[480px]">
-          {/* Loading Skeleton */}
+        {/* OUTPUTS COLUMN */}
+        <div className="lg:col-span-7 flex flex-col min-h-[500px]">
+          {/* Loading state */}
           {isLoading && (
-            <div className="flex-1 bg-slate-950/30 border border-slate-900/50 rounded-2xl p-6 backdrop-blur-md flex flex-col justify-center items-center text-center gap-6 min-h-[500px] shadow-2xl">
-              {/* Spinner/Glow container */}
-              <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-md animate-ping" />
-                <div className="relative p-6 rounded-2xl bg-indigo-950/40 border border-indigo-500/20 animate-bounce">
-                  <Sparkles className="h-8 w-8 text-indigo-400" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <h3 className="text-base font-semibold text-slate-200">
-                  AI Adaptation Engine Active
-                </h3>
-                <p className="text-xs text-indigo-300 font-mono animate-pulse">
+            <div className="flex-1 border border-zinc-900 rounded-lg p-6 bg-zinc-950/20 flex flex-col justify-center items-center text-center gap-4 min-h-[500px]">
+              <svg className="animate-spin h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-mono uppercase tracking-wider text-zinc-300 font-semibold">
+                  Adapting Application
+                </span>
+                <span className="text-[10px] font-mono text-zinc-550 lowercase">
                   {loadingStep}
-                </p>
-              </div>
-              {/* Fake Skeleton Bars */}
-              <div className="w-full max-w-sm flex flex-col gap-3 mt-4">
-                <div className="h-3.5 bg-slate-900 rounded-full w-3/4 animate-pulse self-center" />
-                <div className="h-3 bg-slate-900/80 rounded-full w-full animate-pulse" />
-                <div className="h-3 bg-slate-900/80 rounded-full w-5/6 animate-pulse self-center" />
-                <div className="h-3 bg-slate-900/80 rounded-full w-4/5 animate-pulse" />
+                </span>
               </div>
             </div>
           )}
 
-          {/* Idle / Initial State */}
+          {/* Idle state */}
           {!isLoading && !emailBody && !adaptedCoverLetter && (
-            <div className="flex-1 bg-slate-950/20 border border-slate-900/80 border-dashed rounded-2xl p-8 backdrop-blur-md flex flex-col justify-center items-center text-center gap-4 min-h-[500px] animate-float">
-              <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-                <Mail className="h-7 w-7 text-indigo-400" />
-              </div>
-              <div className="max-w-xs flex flex-col gap-1.5">
-                <h3 className="text-sm font-semibold text-slate-200">
-                  No Application Drafted Yet
+            <div className="flex-1 border border-dashed border-zinc-850 rounded-lg p-8 flex flex-col justify-center items-center text-center gap-3 min-h-[500px] bg-zinc-950/10">
+              <Mail className="h-6 w-6 text-zinc-650" />
+              <div className="max-w-xs flex flex-col gap-1">
+                <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-zinc-400">
+                  Ready to draft
                 </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Enter your credentials and target criteria on the left, then click <strong>Generate Application</strong> to craft your custom pitch.
+                <p className="text-[11px] text-zinc-550 leading-relaxed font-mono">
+                  Input target metrics on the left and submit to view custom email intro and cover letter drafts.
                 </p>
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-650 font-mono">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-800" />
-                <span>Zero Backend Logs</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-800" />
-                <span>100% Free-to-Host</span>
               </div>
             </div>
           )}
 
-          {/* Render Output Form (Active State) */}
+          {/* Active State */}
           {!isLoading && (emailBody || adaptedCoverLetter) && (
-            <div className="flex-1 bg-slate-950/40 border border-slate-900 rounded-2xl p-5 backdrop-blur-md flex flex-col gap-5 justify-between shadow-xl">
-              <div className="flex flex-col gap-4">
-                {/* Tabs & Meta Info */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-900 gap-3">
-                  <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800/80 shrink-0 self-start">
+            <div className="flex-1 border border-zinc-900 bg-zinc-950/20 rounded-lg p-5 flex flex-col justify-between gap-6 shadow-sm">
+              <div className="flex flex-col gap-5">
+                {/* Selector Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-900">
+                  <div className="flex bg-zinc-900 border border-zinc-850 p-0.5 rounded font-mono text-[10px]">
                     <button
                       type="button"
                       onClick={() => setActiveTab("email")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded transition-colors uppercase tracking-wider cursor-pointer ${
                         activeTab === "email"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
-                          : "text-slate-400 hover:text-slate-200"
+                          ? "bg-zinc-800 text-zinc-100 font-semibold"
+                          : "text-zinc-500 hover:text-zinc-300"
                       }`}
                     >
-                      <Send className="h-3 w-3" /> Email Intro
+                      Email Intro
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab("letter")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded transition-colors uppercase tracking-wider cursor-pointer ${
                         activeTab === "letter"
-                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
-                          : "text-slate-400 hover:text-slate-200"
+                          ? "bg-zinc-800 text-zinc-100 font-semibold"
+                          : "text-zinc-500 hover:text-zinc-300"
                       }`}
                     >
-                      <FileText className="h-3 w-3" /> Tailored Cover Letter
+                      Cover Letter
                     </button>
                   </div>
 
                   {candidateName && (
-                    <div className="flex items-center gap-1.5 bg-slate-900/40 border border-slate-900 px-3 py-1.5 rounded-xl self-end">
-                      <User className="h-3.5 w-3.5 text-indigo-400" />
-                      <span className="text-[11px] font-semibold text-slate-300">
-                        Candidate: {candidateName}
-                      </span>
-                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500 bg-zinc-900/60 border border-zinc-850/60 px-2 py-1 rounded">
+                      Name: {candidateName}
+                    </span>
                   )}
                 </div>
 
-                {/* Active Tab Textarea Display */}
+                {/* Display Editor */}
                 {activeTab === "email" ? (
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
                         Email Body
                       </span>
                       <button
                         type="button"
                         onClick={() => handleCopy(emailBody, "email")}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
+                        className="text-[11px] font-mono text-zinc-400 hover:text-zinc-300 flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         {copiedField === "email" ? (
-                          <>
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Copied!</span>
-                          </>
+                          <span className="text-zinc-300">Copied</span>
                         ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            <span>Copy</span>
-                          </>
+                          <span className="underline decoration-zinc-800 underline-offset-2">Copy Plaintext</span>
                         )}
                       </button>
                     </div>
@@ -794,30 +694,24 @@ Format the output strictly as JSON matching the schema below:
                       value={emailBody}
                       onChange={(e) => setEmailBody(e.target.value)}
                       rows={8}
-                      className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 focus:border-indigo-500 focus:bg-slate-900/50 resize-y"
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded p-3 text-xs text-zinc-350 focus:outline-none focus:border-zinc-700 font-mono resize-y leading-relaxed"
                     />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                        Adapted Cover Letter
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                        Adapted Letter
                       </span>
                       <button
                         type="button"
                         onClick={() => handleCopy(adaptedCoverLetter, "letter")}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
+                        className="text-[11px] font-mono text-zinc-400 hover:text-zinc-300 flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         {copiedField === "letter" ? (
-                          <>
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Copied!</span>
-                          </>
+                          <span className="text-zinc-300">Copied</span>
                         ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            <span>Copy</span>
-                          </>
+                          <span className="underline decoration-zinc-800 underline-offset-2">Copy Plaintext</span>
                         )}
                       </button>
                     </div>
@@ -825,17 +719,17 @@ Format the output strictly as JSON matching the schema below:
                       value={adaptedCoverLetter}
                       onChange={(e) => setAdaptedCoverLetter(e.target.value)}
                       rows={12}
-                      className="w-full bg-slate-900/30 border border-slate-800/80 rounded-xl px-3.5 py-2.5 text-sm text-slate-300 focus:border-indigo-500 focus:bg-slate-900/50 resize-y"
+                      className="w-full bg-zinc-950 border border-zinc-900 rounded p-3 text-xs text-zinc-350 focus:outline-none focus:border-zinc-700 font-mono resize-y leading-relaxed"
                     />
                   </div>
                 )}
 
-                {/* Similar Companies Suggestion */}
+                {/* Similar targets */}
                 {similarCompanies && similarCompanies.length > 0 && (
-                  <div className="flex flex-col gap-2 bg-slate-900/20 border border-slate-900/50 rounded-xl p-3.5">
-                    <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-mono">
-                      Similar Targets to Consider:
-                    </h4>
+                  <div className="flex flex-col gap-2 bg-zinc-950/50 border border-zinc-900 rounded p-3">
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
+                      Suggested Similar Targets:
+                    </span>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {similarCompanies.map((company, index) => (
                         <button
@@ -847,10 +741,9 @@ Format the output strictly as JSON matching the schema below:
                               "_blank"
                             )
                           }
-                          className="px-2.5 py-1 text-[11px] font-medium bg-slate-900 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-850 rounded-lg text-slate-300 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
-                          title="Search Careers on Google"
+                          className="px-2 py-0.5 text-[10px] font-mono bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-700 rounded text-zinc-400 flex items-center gap-1 transition-all cursor-pointer"
                         >
-                          {company} <ExternalLink className="h-2.5 w-2.5 text-slate-500" />
+                          {company} <ExternalLink className="h-2.5 w-2.5 text-zinc-650" />
                         </button>
                       ))}
                     </div>
@@ -858,18 +751,17 @@ Format the output strictly as JSON matching the schema below:
                 )}
               </div>
 
-              {/* Action Buttons: Open in my email */}
-              <div className="pt-4 border-t border-slate-900 flex flex-col gap-3">
+              {/* Action buttons */}
+              <div className="pt-4 border-t border-zinc-900 flex flex-col gap-3">
                 <button
                   type="button"
                   onClick={triggerMailTo}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm transition-all duration-300 flex items-center justify-center gap-2 border border-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/15 active:scale-[0.99] cursor-pointer"
+                  className="w-full py-2.5 rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-950 font-semibold font-mono text-xs uppercase tracking-wider transition-colors cursor-pointer text-center"
                 >
-                  <Send className="h-4 w-4" />
-                  <span>Open in My Email</span>
+                  Open in Default Mail Client
                 </button>
-                <div className="flex justify-between items-center text-[10px] text-slate-555 font-mono px-1">
-                  <span>HR Email: {hrEmail ? hrEmail : "(None provided - fill on form)"}</span>
+                <div className="flex justify-between items-center text-[9px] text-zinc-550 font-mono px-1">
+                  <span>To: {hrEmail ? hrEmail : "(Fill in recruiter email)"}</span>
                   <span>Subject: Application for {appType === "internship" ? "Internship" : "Job"}</span>
                 </div>
               </div>
@@ -879,21 +771,21 @@ Format the output strictly as JSON matching the schema below:
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-slate-950 py-4 bg-slate-950/20">
-        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-600 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <p>© 2026 Auto-Apply AI. All computations happen in your browser.</p>
+      <footer className="border-t border-zinc-900 py-6 bg-zinc-950/20 font-mono text-[10px] text-zinc-600">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+          <p>© 2026 Auto-Apply. All processing occurs locally in-browser.</p>
           <div className="flex gap-4">
-            <span className="hover:text-slate-400 transition-colors">100% Client-Side</span>
+            <span className="hover:text-zinc-450 transition-colors">Serverless</span>
             <span>•</span>
-            <span className="hover:text-slate-400 transition-colors">GDPR compliant (BYOK)</span>
+            <span className="hover:text-zinc-450 transition-colors">GDPR Compliant</span>
             <span>•</span>
             <a
               href="https://github.com/google/generative-ai-js"
-              className="text-indigo-400/80 hover:text-indigo-400 hover:underline transition-all"
+              className="text-zinc-500 hover:text-zinc-350 transition-colors"
               target="_blank"
               rel="noreferrer"
             >
-              Gemini SDK
+              Gemini JS SDK
             </a>
           </div>
         </div>
