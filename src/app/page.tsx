@@ -22,7 +22,8 @@ import {
   User,
   RefreshCw,
   Upload,
-  FileCheck
+  FileCheck,
+  Coffee
 } from "lucide-react";
 
 // Pre-filled sample data for verification
@@ -459,6 +460,17 @@ Format the output strictly as JSON matching the schema below:
 
           {/* API Key Input */}
           <div className="flex items-center gap-3">
+            <a
+              href="https://buymeacoffee.com/axelo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-mono text-zinc-400 hover:text-zinc-200 border border-zinc-850 hover:border-zinc-700 bg-zinc-900/40 hover:bg-zinc-900 px-2.5 py-1.5 rounded transition-all active:scale-95 cursor-pointer"
+              title="Buy me a coffee"
+            >
+              <Coffee className="h-3.5 w-3.5 text-zinc-500" />
+              <span className="hidden xs:inline">Coffee</span>
+            </a>
+
             <div className="relative flex items-center bg-zinc-900 border border-zinc-850 rounded px-2.5 py-1 gap-2 w-48 sm:w-64 transition-colors focus-within:border-zinc-700">
               <Key className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
               <input
