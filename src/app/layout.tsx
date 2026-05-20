@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/react";
 
 const outfit = Outfit({
   variable: "--font-sans",
@@ -29,6 +30,7 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-[#030712] text-slate-100 flex flex-col font-sans select-none selection:bg-indigo-500/30 selection:text-indigo-200">
         {children}
+        <Analytics />
       </body>
     </html>
   );
